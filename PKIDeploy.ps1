@@ -21,19 +21,58 @@
             xAdcsCertificationAuthority ADCSConfig {
                 CAType = $ADCSRoot.CAType
                 Credential = $Credential
-                CryptoProviderName = $ADCSRoot.ADCSCryptoProviderName
-                HashAlgorithmName = $ADCSRoot.ADCSHashAlgorithmName
-                KeyLength = $ADCSRoot.ADCSKeyLength
+                CryptoProviderName = $Node.ADCSCryptoProviderName
+                HashAlgorithmName = $Node.ADCSHashAlgorithmName
+                KeyLength = $Node.ADCSKeyLength
                 CACommonName = $ADCSRoot.CACN
-                CADistinguishedNameSuffix = $ADCSRoot.CADNSuffix
-                DatabaseDirectory = $ADCSRoot.CADatabasePath
-                LogDirectory = $ADCSRoot.CALogPath
-                ValidityPeriod = $ADCSRoot.ADCSValidityPeriod
-                ValidityPeriodUnits = $ADCSRoot.ADCSValidityPeriodUnits
+                CADistinguishedNameSuffix = $Node.CADNSuffix
+                DatabaseDirectory = $Node.CADatabasePath
+                LogDirectory = $Node.CALogPath
+                ValidityPeriod = $Node.ADCSValidityPeriod
+                ValidityPeriodUnits = $Node.ADCSValidityPeriodUnits
                 Ensure = 'Present'
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
                 }
+        
+        #bunch of certutil stuff
+        # HKLM\System\CurrentControlSet\Services\Certsvc\Configuration\<YourCAName>
+        # certutil -setreg CA\CRLPublicationURLs "1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n2:http://www.contoso.com/pki/%3%8.crl"
+        # certutil –setreg CA\CACertPublicationURLs "2:http://www.contoso.com/pki/%1_%3%4.crt"
+        # Certutil -setreg CA\CRLOverlapPeriodUnits 12
+        # Certutil -setreg CA\CRLOverlapPeriod "Hours"
+        # Certutil -setreg CA\ValidityPeriodUnits 10
+        #Certutil -setreg CA\ValidityPeriod "Years"
+        #certutil -setreg CA\DSConfigDN CN=Configuration,DC=corp,DC=contoso,DC=com
+        #restart-service certsvc
+        #certutil -crl
+
+        $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
+        foreach ($Setting in $ADCSRoot.RegistrySettings) {
+
+            Registry $Setting.Name  {
+                Ensure = 'Present'
+                Key = "$Key"
+                ValueName = "$($Setting.Name)"
+                ValueType = "$($Setting.Type)"
+                ValueData = "$($Setting.Value)"
+                }
+            }
+         #>
+             
+        #Remove default CRL Distribution Points
+        #Set new CRL Distribution Points
+
+
+        #Export the certificate to a .cer file
+
+        #ADCS Subordinate region
+
+        #File resource to copy the .cer file
+
+        #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
+
+
     }
 }
 
-PKIDeploy -ConfigurationData .\PKIDeploy.psd1 
+PKIDeploy -ConfigurationData .\PKIDeploy.psd1 -outputpath "C:\DSC\Configs"
