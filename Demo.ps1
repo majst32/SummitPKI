@@ -7,3 +7,10 @@ set-item trustedhosts -Value "*"
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\OLRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
 
 Start-DscConfiguration -ComputerName OLRoot.company.pri -Path "C:\DSC\Configs" -Verbose -Wait -Credential Get-Credential
+
+#After registry settings, need certsvc restart:
+restart-service certsvc
+
+#and publish the CRL
+certutil -crl
+
