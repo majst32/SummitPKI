@@ -18,6 +18,13 @@
             Role = 'ADCSRoot'
             Password = 'P@ssw0rd'
         }
+
+     @{
+            NodeName = 'ENTRoot'
+            Role = 'ADCSSub'
+            Password = 'P@ssw0rd'
+            PsDscAllowDomainUser = $True
+        }
     )
     ADCSRoot = @{
             # ADCS Certificate Services information  for offline root
@@ -42,5 +49,8 @@
             CACN = 'IssuingCA-CompanyRoot'
             }
 
+    DomainData = @{
+            DomainDN = "DC=Company,DC=pri"
+            }
 
  }

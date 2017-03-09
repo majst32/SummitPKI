@@ -1,6 +1,8 @@
 ﻿Configuration PKIDeploy {
 
-        Import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xADCSDeployment";ModuleVersion="1.1.0.0"}
+        Import-DSCresource -ModuleName PSDesiredStateConfiguration,
+            @{ModuleName="xADCSDeployment";ModuleVersion="1.1.0.0"},
+            @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
 
@@ -35,6 +37,8 @@
                 }
         
         #bunch of certutil stuff
+        #Remove default CRL Distribution Points
+        #Set new CRL Distribution Points
         # HKLM\System\CurrentControlSet\Services\Certsvc\Configuration\<YourCAName>
         # certutil -setreg CA\CRLPublicationURLs "1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n2:http://www.contoso.com/pki/%3%8.crl"
         # certutil –setreg CA\CACertPublicationURLs "2:http://www.contoso.com/pki/%1_%3%4.crt"
@@ -43,6 +47,9 @@
         # Certutil -setreg CA\ValidityPeriodUnits 10
         #Certutil -setreg CA\ValidityPeriod "Years"
         #certutil -setreg CA\DSConfigDN CN=Configuration,DC=corp,DC=contoso,DC=com
+        
+        #Still need?
+        
         #restart-service certsvc
         #certutil -crl
 
@@ -57,20 +64,69 @@
                 ValueData = "$($Setting.Value)"
                 }
             }
-         #>
-             
-        #Remove default CRL Distribution Points
-        #Set new CRL Distribution Points
 
+            xSMBShare RootShare {
+                Name = "RootShare"
+                Path = "C:\Windows\System32\certsrv\certenroll"
+                }   
 
-        #Export the certificate to a .cer file
+        }  #End ADCSRoot
 
         #ADCS Subordinate region
+        
+        Node $AllNodes.Where{$_.Role -eq "ADCSSub"}.NodeName {
 
-        #File resource to copy the .cer file
+        $Secure = ConvertTo-SecureString -String "$($Node.Password)" -AsPlainText -Force 
+        $Credential = New-Object -typename Pscredential -ArgumentList Administrator, $secure 
+        $DACredential = New-Object -TypeName Pscredential -ArgumentList "Company.pri\administrator", $Secure
 
+        #NonNodeData
+        $ADCSSub = $ConfigurationData.ADCSSub
+        $ADCSRoot = $ConfigurationData.ADCSRoot
+        $DomainData = $ConfigurationData.DomainData
+
+        $OLRoot = $AllNodes.Where({$_.Role -eq "ADCSRoot"}).NodeName
+
+            File RootCert {
+                SourcePath = "\\$OLRoot\RootShare"
+                DestinationPath = "C:\temp"
+                Ensure = 'Present'
+                MatchSource = $True
+                Recurse = $True
+                Credential = $Credential
+                }
+            
+            WindowsFeature RSAT-AD-PowerShell {
+                Name = "RSAT-AD-PowerShell"
+                Ensure = 'Present'
+                }
+
+            Script DSPublish {
+                Credential = $DACredential
+                TestScript = {
+                    try {
+                        Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri"
+                        Return $True
+                    }
+                    Catch {
+                        Return $False
+                        }
+                    }
+                SetScript = {
+                    #optionally import-certificate -filepath C:\Temp\OLRoot_CompanyRoot.crt -CertStoreLocation Cert:\LocalMachine\Root
+                    #$RootShort = $Using:OLRoot.split(".")[0]
+                    #$CertName = "$(RootShort)_$Using:ADCSRoot.CACN
+                    certutil -dspublish -f "C:\Temp\OLROOT_CompanyRoot.crt" RootCA -dc DC1 -v
+                    }
+                GetScript = {
+                    Return @{Result = (Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri").Name}
+                    }
+                }
+            
         #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
-
+        #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
+        #certutil –addstore –f root orca1_ContosoRootCA.crt
+        #certutil –addstore –f root ContosoRootCA.crl
 
     }
 }

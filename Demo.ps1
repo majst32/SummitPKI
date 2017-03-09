@@ -5,6 +5,7 @@ Add-DnsServerResourceRecordA -IPv4Address 192.168.3.20 -ComputerName DC1 -ZoneNa
 #Not a good idea to try to push the config from a remote machine, but if you insist.
 set-item trustedhosts -Value "*"
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\OLRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\olroot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
 
 Start-DscConfiguration -ComputerName OLRoot.company.pri -Path "C:\DSC\Configs" -Verbose -Wait -Credential Get-Credential
 
@@ -13,4 +14,9 @@ restart-service certsvc
 
 #and publish the CRL
 certutil -crl
+
+#Publish the root certificate through LDAP.
+#Optionally, distribute through group policy.
+#Optionally, distribute through DSC.  This may not work for credential encryption.
+certutil -dspublish -f C:\Temp\OLROOT_CompanyRoot.crt RootCA 
 
