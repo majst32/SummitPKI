@@ -6,6 +6,9 @@ Add-DnsServerResourceRecordA -IPv4Address 192.168.3.20 -ComputerName DC1 -ZoneNa
 set-item trustedhosts -Value "*"
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\OLRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\olroot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+
 
 Start-DscConfiguration -ComputerName OLRoot.company.pri -Path "C:\DSC\Configs" -Verbose -Wait -Credential Get-Credential
 
@@ -19,4 +22,9 @@ certutil -crl
 #Optionally, distribute through group policy.
 #Optionally, distribute through DSC.  This may not work for credential encryption.
 certutil -dspublish -f C:\Temp\OLROOT_CompanyRoot.crt RootCA 
+
+#Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
+        #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
+        #certutil –addstore –f root orca1_ContosoRootCA.crt
+        #certutil –addstore –f root ContosoRootCA.crl
 

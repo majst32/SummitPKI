@@ -27,7 +27,7 @@
                 HashAlgorithmName = $Node.ADCSHashAlgorithmName
                 KeyLength = $Node.ADCSKeyLength
                 CACommonName = $ADCSRoot.CACN
-                CADistinguishedNameSuffix = $Node.CADNSuffix
+                CADistinguishedNameSuffix = $ADCSRoot.CADNSuffix
                 DatabaseDirectory = $Node.CADatabasePath
                 LogDirectory = $Node.CALogPath
                 ValidityPeriod = $Node.ADCSValidityPeriod
@@ -86,17 +86,71 @@
         $DomainData = $ConfigurationData.DomainData
 
         $OLRoot = $AllNodes.Where({$_.Role -eq "ADCSRoot"}).NodeName
+        
+        File RootCert {
+            SourcePath = "\\$OLRoot\RootShare"
+            DestinationPath = "C:\temp"
+            Ensure = 'Present'
+            MatchSource = $True
+            Recurse = $True
+            Credential = $Credential
+            }
+#>
+        
+        $RootFile = "$($OlRoot.Split(".")[0])_$($ADCSRoot.CACN).crt"
 
-            File RootCert {
-                SourcePath = "\\$OLRoot\RootShare"
-                DestinationPath = "C:\temp"
-                Ensure = 'Present'
-                MatchSource = $True
-                Recurse = $True
-                Credential = $Credential
+        Script ImportRoot {
+            TestScript = {
+                $Issuer = $Using:ADCSRoot.CaCN
+                $Cert = get-childitem -Path Cert:\LocalMachine\Root | Where-Object {$_.Issuer -like "*$issuer*"}
+                if ($Cert -eq $Null) {return $False}
+                else {return $True}
                 }
+            SetScript = {
+                Import-Certificate -FilePath "C:\temp\$Using:RootFile" -CertStoreLocation "Cert:\LocalMachine\Root"
+                }
+            GetScript = {
+                $Issuer = $Using:ADCSRoot.CaCN
+                $Result = Get-ChildItem -path Cert:\LocalMachine\Root | where-object {$_Issuer -like "$Issuer*"} | select-object Subject
+                return @{Result=$Result}
+                }
+            }
+          
+          #Certutil -addstore -root CRLFile
+           
+          foreach ($Feature in $ADCSSub.Features) {
+
+            WindowsFeature $Feature {
+                Name = $Feature
+                Ensure = 'Present'
+                }
+                
+        }
+                 
+            xAdcsCertificationAuthority ADCSSub {
+                CAType = $ADCSSub.CAType
+                Credential = $DACredential
+                CryptoProviderName = $Node.ADCSCryptoProviderName
+                HashAlgorithmName = $Node.ADCSHashAlgorithmName
+                KeyLength = $Node.ADCSKeyLength
+                CACommonName = $ADCSSub.CACN
+                CADistinguishedNameSuffix = $ADCSSub.CADNSuffix
+                DatabaseDirectory = $Node.CADatabasePath
+                LogDirectory = $Node.CALogPath
+                ParentCA = "$($OLRoot)\$($ADCSRoot.CACN)"
+                Ensure = 'Present'
+                DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
+                }  
+                 
+ <#       xCertificateImport RootImport {
+            Ensure = "Present"
+            Path = "\\OLRoot\RootShare\OLROOT_CompanyRoot.crt"
+            Location = 'LocalMachine'
+            Store = 'Root'
+        }
+#>
             
-            WindowsFeature RSAT-AD-PowerShell {
+<#            WindowsFeature RSAT-AD-PowerShell {
                 Name = "RSAT-AD-PowerShell"
                 Ensure = 'Present'
                 }
@@ -122,7 +176,7 @@
                     Return @{Result = (Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri").Name}
                     }
                 }
-            
+#>            
         #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
         #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
         #certutil –addstore –f root orca1_ContosoRootCA.crt

@@ -3,7 +3,6 @@
         @{
             NodeName = '*'
             PSDscAllowPlainTextPassword = $true
-            CADNSuffix = 'C=US,L=Philadelphia,S=Pennsylvania,O=Company'
             CADatabasePath = 'C:\windows\system32\CertLog'
             CALogPath = 'C:\CA_Logs'
             ADCSCryptoProviderName = 'RSA#Microsoft Software Key Storage Provider'
@@ -31,6 +30,7 @@
             Features = @('ADCS-Cert-Authority';'RSAT-ADCS-Mgmt')
             CAType = 'StandaloneRootCA'
             CACN = 'CompanyRoot'
+            CADNSuffix = 'C=US,L=Philadelphia,S=Pennsylvania,O=Company'
             RegistrySettings = @(
                 @{Name = "CRLPublicationURLs";Type = "MultiString";Value = @('1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n','2:http://www.company.pri/pki/%3%8.crl')},
                 @{Name = "CACertPublicationURLs"; Type = "MultiString"; Value = "2:http://www.company.pri/pki/%1_%3%4.crt"},
@@ -47,6 +47,7 @@
             Features = @('ADCS-Cert-Authority';'RSAT-ADCS-Mgmt')
             CAType = 'EnterpriseSubordinateCA'
             CACN = 'IssuingCA-CompanyRoot'
+            CADNSuffix = 'DC=Company,DC=pri'
             }
 
     DomainData = @{
