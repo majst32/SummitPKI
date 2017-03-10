@@ -3,7 +3,8 @@
         Import-DSCresource -ModuleName PSDesiredStateConfiguration,
             @{ModuleName="xADCSDeployment";ModuleVersion="1.1.0.0"},
             @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"},
-            @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"}
+            @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"},
+            @{ModuleName="xWebAdministration";ModuleVersion="1.17.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
 
@@ -100,6 +101,7 @@
 
         $OLRoot = $AllNodes.Where({$_.Role -eq "ADCSRoot"}).NodeName
         
+        #Copy Root Cert from OLRoot
         File RootCert {
             SourcePath = "\\$OLRoot\RootShare"
             DestinationPath = "C:\temp"
@@ -109,9 +111,9 @@
             Credential = $Credential
             }
 #>
-        
         $RootFile = "$($OlRoot.Split(".")[0])_$($ADCSRoot.CACN).crt"
 
+        #Import Root Cert into Trusted Root Store on SubCA
         Script ImportRoot {
             TestScript = {
                 $Issuer = $Using:ADCSRoot.CaCN
@@ -139,7 +141,36 @@
                 }
                 
         }
-                 
+           
+    File PKICRLDir {
+        Ensure = 'Present'
+        Type = 'Directory'
+        DestinationPath = 'C:\pki'
+        }
+        
+   File PKICRL {
+        Ensure = 'Present'
+        Type = 'File'
+        DestinationPath = 'C:\pki\cps.txt'
+        Contents = 'Example CPS Statement'
+        }
+
+    xSmbShare PKIShare {
+        Name = 'PKI'
+        Path = 'C:\pki'
+        FullAccess = "SYSTEM","Company\Domain Admins"
+        ChangeAccess = "Company\Cert Publishers"
+        }
+        
+
+<#        #Install website for CRL distribution
+            xWebvirtualDirectory PKI {
+                Website = "Default Web Site"
+                Name = 'PKI'
+                PhysicalPath = 'C:\pki'
+                Ensure = 'Present'
+                WebApplication = 
+ #>                
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType
                 Credential = $DACredential

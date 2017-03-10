@@ -52,7 +52,7 @@
 
     ADCSSub = @{
             # ADCS Certificate Services info for Enterprise Subordinate
-            Features = @('ADCS-Cert-Authority';'RSAT-ADCS-Mgmt')
+            Features = @('ADCS-Cert-Authority';'RSAT-ADCS-Mgmt';'Web-Server')
             CAType = 'EnterpriseSubordinateCA'
             CACN = 'IssuingCA-CompanyRoot'
             CADNSuffix = 'DC=Company,DC=pri'
