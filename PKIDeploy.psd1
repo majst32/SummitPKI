@@ -10,6 +10,7 @@
             ADCSKeyLength = '2048'
             ADCSValidityPeriod = 'Years'
             ADCSValidityPeriodUnits = '2'
+            DNSSuffix = 'company.pri'
            }
       
      @{
@@ -23,6 +24,13 @@
             Role = 'ADCSSub'
             Password = 'P@ssw0rd'
             PsDscAllowDomainUser = $True
+        }
+     
+     @{     NodeName = 'DC1'
+            Role = 'DC'
+            Password = 'P@ssword'
+            PsDSCAllowDomainUser = $True
+            EntRootIP = '192.168.3.30'
         }
     )
     ADCSRoot = @{

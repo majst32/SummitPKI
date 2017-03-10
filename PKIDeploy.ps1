@@ -2,7 +2,8 @@
 
         Import-DSCresource -ModuleName PSDesiredStateConfiguration,
             @{ModuleName="xADCSDeployment";ModuleVersion="1.1.0.0"},
-            @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"}
+            @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"},
+            @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
 
@@ -71,6 +72,18 @@
                 }   
 
         }  #End ADCSRoot
+
+    Node $AllNodes.Where({$_.Role -eq "DC"}).NodeName {
+        
+        xDnsRecord PKIRecord {
+            Name = "www"
+            Zone = $Node.DNSSuffix
+            PsDscRunAsCredential = $DACredential
+            Ensure = 'Present'
+            Type = 'ARecord'
+            Target = $Node.EntRootIP
+            }
+    }
 
         #ADCS Subordinate region
         
@@ -142,6 +155,9 @@
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
                 }  
                  
+
+
+
  <#       xCertificateImport RootImport {
             Ensure = "Present"
             Path = "\\OLRoot\RootShare\OLROOT_CompanyRoot.crt"
