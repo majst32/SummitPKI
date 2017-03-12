@@ -142,34 +142,35 @@
                 
         }
            
-    File PKICRLDir {
-        Ensure = 'Present'
-        Type = 'Directory'
-        DestinationPath = 'C:\pki'
-        }
+            File PKICRLDir {
+                Ensure = 'Present'
+                Type = 'Directory'
+                DestinationPath = 'C:\pki'
+                }
         
-   File PKICRL {
-        Ensure = 'Present'
-        Type = 'File'
-        DestinationPath = 'C:\pki\cps.txt'
-        Contents = 'Example CPS Statement'
-        }
+           File PKICRL {
+                Ensure = 'Present'
+                Type = 'File'
+                DestinationPath = 'C:\pki\cps.txt'
+                Contents = 'Example CPS Statement'
+                }
 
-    xSmbShare PKIShare {
-        Name = 'PKI'
-        Path = 'C:\pki'
-        FullAccess = "SYSTEM","Company\Domain Admins"
-        ChangeAccess = "Company\Cert Publishers"
-        }
+            xSmbShare PKIShare {
+                Name = 'PKI'
+                Path = 'C:\pki'
+                FullAccess = "SYSTEM","Company\Domain Admins"
+                ChangeAccess = "Company\Cert Publishers"
+                }
         
 
-<#        #Install website for CRL distribution
+        #Install website for CRL distribution
             xWebvirtualDirectory PKI {
                 Website = "Default Web Site"
                 Name = 'PKI'
                 PhysicalPath = 'C:\pki'
                 Ensure = 'Present'
-                WebApplication = 
+                WebApplication = ''
+                }
  #>                
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType

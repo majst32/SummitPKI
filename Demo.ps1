@@ -9,6 +9,8 @@ Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destinat
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xDNSServer" -Destination "\\DC1.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+
 
 Start-DscConfiguration -ComputerName OLRoot.company.pri -Path "C:\DSC\Configs" -Verbose -Wait -Credential Get-Credential
 
