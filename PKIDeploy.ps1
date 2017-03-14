@@ -77,6 +77,7 @@
 
     Node $AllNodes.Where({$_.Role -eq "DC"}).NodeName {
         
+        #Create a DNS record for www.company.pri
         xDnsRecord PKIRecord {
             Name = "www"
             Zone = $Node.DNSSuffix
@@ -132,7 +133,7 @@
                 }
             }
           
-          #Certutil -addstore -root CRLFile
+          #Certutil -addstore -root CRLFile - need code
            
           foreach ($Feature in $ADCSSub.Features) {
 
@@ -143,18 +144,21 @@
                 
         }
            
+            #Create directory structure for virtual directory
             File PKICRLDir {
                 Ensure = 'Present'
                 Type = 'Directory'
                 DestinationPath = 'C:\pki'
                 }
-        
-           File PKICRL {
+           
+           #Create file
+            File PKICRL {
                 Ensure = 'Present'
                 Type = 'File'
                 DestinationPath = 'C:\pki\cps.txt'
                 Contents = 'Example CPS Statement'
                 }
+            #Create Share
 
             xSmbShare PKIShare {
                 Name = 'PKI'
@@ -173,6 +177,7 @@
                 WebApplication = ''
                 }
 
+        #Set ACLs on folder for CRL publishing
             FileACLs CertPublishers {
                 Path = "C:\PKI"
                 IdentityReference = "Company\Cert Publishers"
@@ -192,7 +197,26 @@
                 PropagationFlags = "None"
                 Ensure = 'Present'
             }
- #>                
+ 
+            Script DoubleEscaping {
+                TestScript = {
+                    if ((Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping) -eq $True) {
+                        return $True
+                        }
+                    else {return $False}
+                    }
+                SetScript = {
+                    $filter = Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’
+                    $Filter.AllowDoubleEscaping = $True
+                    $Filter | Set-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI'
+                    }
+                GetScript = {
+                    $Filter = (Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping)
+                    return @{Result = $Filter.AllowDoubleEscaping}
+                    }
+                }
+                
+                                
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType
                 Credential = $DACredential
