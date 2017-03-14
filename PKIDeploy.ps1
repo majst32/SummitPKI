@@ -68,10 +68,19 @@
                 }
             }
 
+            #Change this into a file resource that puts the file somewhere else if time
             xSMBShare RootShare {
                 Name = "RootShare"
                 Path = "C:\Windows\System32\certsrv\certenroll"
                 }   
+
+            WaitForAll WFADCSSub {
+                NodeName = 'ENTROOT'
+                ResourceName = '[xADCSCertificationAuthority]ADCSSub'
+                RetryIntervalSec = 60
+                RetryCount = 30
+                }
+
 
         }  #End ADCSRoot
 
@@ -102,6 +111,13 @@
         $DomainData = $ConfigurationData.DomainData
 
         $OLRoot = $AllNodes.Where({$_.Role -eq "ADCSRoot"}).NodeName
+        
+        WaitForAll WFADCSRootInstall {
+            NodeName = 'olroot.company.pri'
+            ResourceName = '[xSMBShare]RootShare'
+            RetryIntervalSec = 60
+            RetryCount = 30
+            }
         
         #Copy Root Cert from OLRoot
         File RootCert {
@@ -215,8 +231,7 @@
                     return @{Result = $Filter.AllowDoubleEscaping}
                     }
                 }
-                
-                                
+                                               
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType
                 Credential = $DACredential
@@ -230,18 +245,10 @@
                 ParentCA = "$($OLRoot)\$($ADCSRoot.CACN)"
                 Ensure = 'Present'
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
-                }  
-                 
+                }                 
 
 
 
- <#       xCertificateImport RootImport {
-            Ensure = "Present"
-            Path = "\\OLRoot\RootShare\OLROOT_CompanyRoot.crt"
-            Location = 'LocalMachine'
-            Store = 'Root'
-        }
-#>
             
 <#            WindowsFeature RSAT-AD-PowerShell {
                 Name = "RSAT-AD-PowerShell"
