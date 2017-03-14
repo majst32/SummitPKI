@@ -10,17 +10,20 @@
         [parameter(Mandatory=$True)]
         [string]$IdentityReference,
 
-        [System.Security.AccessControl.FileSystemRights]$FileSystemRights,
+        [parameter(Mandatory=$True)]
+        [ValidateSet("AppendData","ChangePermissions","CreateDirectories","CreateFiles","Delete","DeleteSubdirectoriesAndFiles", `
+            "ExecuteFile","FullControl","ListDirectory","Modify","Read","ReadAndExecute","ReadAttributes","ReadData","ReadExtendedAttributes", `
+            "ReadPermissions","Synchronize","TakeOwnership","Traverse","Write","WriteAttributes","WriteData","WriteExtendedAttributes")]
+        [string[]]$FileSystemRights,
 
         [ValidateSet("Allow","Deny")]
-        [System.Security.AccessControl.AccessControlType]$AccessControlType,
+        [string]$AccessControlType,
 
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
+        [ValidateSet("ContainerInherit","ObjectInherit","None")]
+        [string[]]$InheritanceFlags,
 
-        [bool]$IsInherited,
-
-        [ValidateSet("None","InheritOnly","NoPropagateInheritance")]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags,
+        [ValidateSet("None","InheritOnly","NoPropagateInherit")]
+        [string]$PropagationFlags,
         
         [parameter(Mandatory=$True)]
         [ValidateSet("Present","Absent")]
@@ -28,31 +31,43 @@
         )
         
         if ($Ensure -eq'Absent') {
+        
             $ACL = (get-acl -Path $Path).Access | Where-Object {$_.IdentityReference -eq $IdentityReference}
+            
             if ($ACL -eq $Null) {
                 write-verbose -Message ("Desired State is $Ensure and no ACL exists for $IdentityReference.  Desired State is correct.")
                 Return $True
                 }
+            
             else {
                 write-verbose -Message ("Desired State is $Ensure and an ACL exists for $IdentityReference.  Desired State is not correct.")
                 return $False}
             }
+        
+        #Ensure = Present
+        #This Test is not working.  It will return false every time.
         else {
             
             $ACL = (get-acl -Path $Path).Access | Where-Object {$_.IdentityReference -eq $IdentityReference}
-            If ($ACL -ne $Null) {
-                $Params = 'AccessControlType','FileSystemRights','IdentityReference','IsInherited','PropagationFlags','InheritanceFlags'
-                if ($PSBoundParameters.Keys.Where({$_ -in $Params}) | ForEach-Object {Compare-Object -ReferenceObject $PSBoundParameters.$_ -DifferenceObject $ACL.$_ -Verbose})
-                    { 
-                        write-verbose "ACL found for $IdentityReference, but parameters do not match."
-                        return $false
-
+                If ($ACL -ne $Null) {
+                    $Params = 'AccessControlType','FileSystemRights','InheritanceFlags'
+                        foreach ($A in $ACL) {
+                            if (!($PSBoundParameters.Keys.Where({$_ -in $Params}) | ForEach-Object {Compare-Object -ReferenceObject $PSBoundParameters.$_ -DifferenceObject ($A.$_) -Verbose}))
+                                { 
+                                    write-verbose "ACL is in Desired State."
+                                    return $true
+                                }
+                            else {
+                                write-verbose "ACL not found, continuing comparison"
+                                }
+                            }
+                        return $False
                     }
+                #ACL = Null
                 else {
-                    write-verbose "ACL is in Desired State."
-                    return $true
-                    }
-            }
+                    write-verbose "No ACL was found, but should be set."
+                    return $false  
+                }
         }
 }
  
@@ -66,21 +81,21 @@
         [parameter(Mandatory=$True)]
         [string]$IdentityReference,
 
+        [parameter(Mandatory=$True)]
         [ValidateSet("AppendData","ChangePermissions","CreateDirectories","CreateFiles","Delete","DeleteSubdirectoriesAndFiles", `
             "ExecuteFile","FullControl","ListDirectory","Modify","Read","ReadAndExecute","ReadAttributes","ReadData","ReadExtendedAttributes", `
-            "ReadPermissions","Synchronize","TakeOwnership","Traverse","Write","WriteAttibutes","WriteData","WriteExtendedAttributes")]
-        [System.Security.AccessControl.FileSystemRights]$FileSystemRights,
+            "ReadPermissions","Synchronize","TakeOwnership","Traverse","Write","WriteAttributes","WriteData","WriteExtendedAttributes")]
+        [string[]]$FileSystemRights,
 
         [ValidateSet("Allow","Deny")]
-        [System.Security.AccessControl.AccessControlType]$AccessControlType,
+        [string]$AccessControlType,
 
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
-
-        [bool]$IsInherited,
-
-        [ValidateSet("None","InheritOnly","NoPropagateInheritance")]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags,
+        [ValidateSet("ContainerInherit","ObjectInherit","None")]
+        [string[]]$InheritanceFlags,
         
+        [ValidateSet("None","InheritOnly","NoPropagateInherit")]
+        [string]$PropagationFlags,
+
         [parameter(Mandatory=$True)]
         [ValidateSet("Present","Absent")]
         [string]$Ensure="Present"
@@ -111,20 +126,20 @@
         [parameter(Mandatory=$True)]
         [string]$IdentityReference,
 
+        [parameter(Mandatory=$True)]
         [ValidateSet("AppendData","ChangePermissions","CreateDirectories","CreateFiles","Delete","DeleteSubdirectoriesAndFiles", `
             "ExecuteFile","FullControl","ListDirectory","Modify","Read","ReadAndExecute","ReadAttributes","ReadData","ReadExtendedAttributes", `
-            "ReadPermissions","Synchronize","TakeOwnership","Traverse","Write","WriteAttibutes","WriteData","WriteExtendedAttributes")]
-        [System.Security.AccessControl.FileSystemRights]$FileSystemRights,
+            "ReadPermissions","Synchronize","TakeOwnership","Traverse","Write","WriteAttributes","WriteData","WriteExtendedAttributes")]
+        [string[]]$FileSystemRights,
 
         [ValidateSet("Allow","Deny")]
-        [System.Security.AccessControl.AccessControlType]$AccessControlType,
+        [string]$AccessControlType,
 
-        [System.Security.AccessControl.InheritanceFlags]$InheritanceFlags,
+        [ValidateSet("ContainerInherit","ObjectInherit","None")]
+        [string[]]$InheritanceFlags,
 
-        [bool]$IsInherited,
-
-        [ValidateSet("None","InheritOnly","NoPropagateInheritance")]
-        [System.Security.AccessControl.PropagationFlags]$PropagationFlags,
+        [ValidateSet("None","InheritOnly","NoPropagateInherit")]
+        [string]$PropagationFlags,
         
         [parameter(Mandatory=$True)]
         [ValidateSet("Present","Absent")]

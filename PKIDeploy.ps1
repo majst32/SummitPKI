@@ -4,7 +4,8 @@
             @{ModuleName="xADCSDeployment";ModuleVersion="1.1.0.0"},
             @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"},
             @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"},
-            @{ModuleName="xWebAdministration";ModuleVersion="1.17.0.0"}
+            @{ModuleName="xWebAdministration";ModuleVersion="1.17.0.0"},
+            @{ModuleName="mACLs";ModuleVersion="1.0.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
 
@@ -171,6 +172,26 @@
                 Ensure = 'Present'
                 WebApplication = ''
                 }
+
+            FileACLs CertPublishers {
+                Path = "C:\PKI"
+                IdentityReference = "Company\Cert Publishers"
+                FileSystemRights = 'Modify'
+                AccessControlType = 'Allow'
+                InheritanceFlags = "ContainerInherit","ObjectInherit"
+                PropagationFlags = "None"
+                Ensure = 'Present'
+            }
+
+            FileACLs Anonymous {
+                Path = "C:\PKI"
+                IdentityReference = "IIS AppPool\DefaultAppPool"
+                FileSystemRights = 'Read','ReadAndExecute','ListDirectory'
+                AccessControlType = 'Allow'
+                InheritanceFlags = "ContainerInherit","ObjectInherit"
+                PropagationFlags = "None"
+                Ensure = 'Present'
+            }
  #>                
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType
