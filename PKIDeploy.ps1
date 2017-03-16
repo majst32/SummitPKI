@@ -5,15 +5,17 @@
             @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"},
             @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"},
             @{ModuleName="xWebAdministration";ModuleVersion="1.17.0.0"},
-            @{ModuleName="mACLs";ModuleVersion="1.0.0.0"}
+            @{ModuleName="mACLs";ModuleVersion="1.0.0.0"},
+            @{ModuleName="xPendingReboot";ModuleVersion="0.3.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
 
+        #Set up all the variables
         $ADCSRoot = $ConfigurationData.ADCSRoot
-
         $Secure = ConvertTo-SecureString -String "$($Node.Password)" -AsPlainText -Force 
         $Credential = New-Object -typename Pscredential -ArgumentList Administrator, $secure 
 
+        #Install Windows Features
         foreach ($Feature in $ADCSRoot.Features) {
 
             WindowsFeature $Feature {
@@ -22,7 +24,28 @@
                 }
                 
         }
-                 
+        #If CA hasn't been installed yet, set $DSCMachineStatus to $True to set up for reboot after.
+        script SetForReboot {
+            testScript = {
+                    try {
+                        Install-AdcsCertificationAuthority -whatif -ErrorAction Stop
+                        return $False
+                    }
+                    catch {
+                        return $True
+                    }
+            }
+            setScript = {
+                $DSCMachineStatus = 1
+                }
+            getscript = {
+                return @{Result = $DSCMachineStatus}
+            }
+            DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
+        }
+
+
+        #Configure Root CA         
             xAdcsCertificationAuthority ADCSConfig {
                 CAType = $ADCSRoot.CAType
                 Credential = $Credential
@@ -39,21 +62,8 @@
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
                 }
         
-        #bunch of certutil stuff
-        #Remove default CRL Distribution Points
-        #Set new CRL Distribution Points
-        # HKLM\System\CurrentControlSet\Services\Certsvc\Configuration\<YourCAName>
-        # certutil -setreg CA\CRLPublicationURLs "1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n2:http://www.contoso.com/pki/%3%8.crl"
-        # certutil –setreg CA\CACertPublicationURLs "2:http://www.contoso.com/pki/%1_%3%4.crt"
-        # Certutil -setreg CA\CRLOverlapPeriodUnits 12
-        # Certutil -setreg CA\CRLOverlapPeriod "Hours"
-        # Certutil -setreg CA\ValidityPeriodUnits 10
-        #Certutil -setreg CA\ValidityPeriod "Years"
-        #certutil -setreg CA\DSConfigDN CN=Configuration,DC=corp,DC=contoso,DC=com
+        #Configure Root CA settings:  CRL and Cert publication URLs
         
-        #Still need?
-        
-        #restart-service certsvc
         #certutil -crl
 
         $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
@@ -65,8 +75,17 @@
                 ValueName = "$($Setting.Name)"
                 ValueType = "$($Setting.Type)"
                 ValueData = "$($Setting.Value)"
+                DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
                 }
             }
+
+            #Reboot to pick up certutil settings if needed, but only if previous script set the flag for reboot.
+            xPendingReboot RebootforCertsvc {
+                Name = 'Reboot'
+                DependsOn = '[Registry]DSConfigDN','[Script]SetForReboot'
+            }
+
+            #certutil -crl
 
             #Change this into a file resource that puts the file somewhere else if time
             xSMBShare RootShare {
