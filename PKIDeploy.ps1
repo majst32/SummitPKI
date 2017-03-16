@@ -101,6 +101,7 @@
             xSMBShare RootShare {
                 Name = "RootShare"
                 Path = "C:\temp"
+                DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
                 }   
 
             WaitForAll WFADCSSub {
@@ -108,6 +109,7 @@
                 ResourceName = '[xADCSCertificationAuthority]ADCSSub'
                 RetryIntervalSec = 60
                 RetryCount = 30
+                DependsOn = '[xSMBShare]RootShare'
                 }
 
 
@@ -123,7 +125,34 @@
             Ensure = 'Present'
             Type = 'ARecord'
             Target = $Node.EntRootIP
-            }
+        }
+        
+        WaitForAll WaitForRoot {
+            NodeName = 'OLRoot.company.pri'
+            ResourceName = '[file]CopyRootCert'
+            Retryintervalsec = 60
+            RetryCount = 30
+        }
+
+        Script DSPublish {
+                Credential = $DACredential
+                TestScript = {
+                    try {
+                        Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri"
+                        Return $True
+                    }
+                    Catch {
+                        Return $False
+                        }
+                    }
+                SetScript = {
+                    certutil -dspublish -f "C:\Temp\OLROOT_CompanyRoot.crt" RootCA
+                    }
+                GetScript = {
+                    Return @{Result = (Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri").Name}
+                    }
+                }
+ 
     }
 
         #ADCS Subordinate region
@@ -148,6 +177,13 @@
             RetryCount = 30
             }
         
+        WaitForAll WFDSPublish {
+            NodeName = 'DC1'
+            ResourceName = '[Script]DSPublish'
+            RetryIntervalSec = 60
+            RetryCount = 30
+            }
+
         #Copy Root Cert from OLRoot
         File RootCert {
             SourcePath = "\\$OLRoot\RootShare"
@@ -161,6 +197,7 @@
         $RootFile = "$($OlRoot.Split(".")[0])_$($ADCSRoot.CACN).crt"
 
         #Import Root Cert into Trusted Root Store on SubCA
+        #certutil –addstore –f root orca1_ContosoRootCA.crt
         Script ImportRoot {
             TestScript = {
                 $Issuer = $Using:ADCSRoot.CaCN
@@ -251,9 +288,9 @@
                     else {return $False}
                     }
                 SetScript = {
-                    $filter = Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’
+                    $filter = Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath 'IIS:\sites\Default Web Site\PKI'
                     $Filter.AllowDoubleEscaping = $True
-                    $Filter | Set-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI'
+                    $Filter | Set-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath 'IIS:\sites\Default Web Site\PKI'
                     }
                 GetScript = {
                     $Filter = (Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping)
@@ -279,35 +316,9 @@
 
 
             
-<#            WindowsFeature RSAT-AD-PowerShell {
-                Name = "RSAT-AD-PowerShell"
-                Ensure = 'Present'
-                }
 
-            Script DSPublish {
-                Credential = $DACredential
-                TestScript = {
-                    try {
-                        Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri"
-                        Return $True
-                    }
-                    Catch {
-                        Return $False
-                        }
-                    }
-                SetScript = {
-                    #optionally import-certificate -filepath C:\Temp\OLRoot_CompanyRoot.crt -CertStoreLocation Cert:\LocalMachine\Root
-                    #$RootShort = $Using:OLRoot.split(".")[0]
-                    #$CertName = "$(RootShort)_$Using:ADCSRoot.CACN
-                    certutil -dspublish -f "C:\Temp\OLROOT_CompanyRoot.crt" RootCA -dc DC1 -v
-                    }
-                GetScript = {
-                    Return @{Result = (Get-ADObject -Identity "CN=CompanyRoot,CN=Certification Authorities,CN=Public Key Services,CN=Services,CN=Configuration,DC=Company,DC=Pri").Name}
-                    }
-                }
-#>            
+           
         #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
-        #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
         #certutil –addstore –f root orca1_ContosoRootCA.crt
         #certutil –addstore –f root ContosoRootCA.crl
 
