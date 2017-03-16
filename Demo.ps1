@@ -1,4 +1,20 @@
-﻿#Need DNS or HostFile entry for OLRoot.
+﻿#Landscape
+#OLRoot - "offline", non-domain-joined
+#EntRoot - domain-joined subordinate CA
+#DC1 - domain controller
+
+#The build:
+#https://technet.microsoft.com/en-us/library/hh831348(v=ws.11).aspx
+
+#The code and dilemmas:
+#Ugh, certutil
+#restart is not a state
+#The double-hop (CertUtil dspublish, DNS entry)
+#Mistakes were made:  deciding to write a custom resource badly for FileACLs (and the ensuing rabbit hole)
+#No good resources for ACLs... the fileACL dilemma
+#Better PowerShell cmdlets for ADCS means better DSC resources :)
+
+#Need DNS or HostFile entry for OLRoot.
 Install-WindowsFeature RSAT-DNS-Server
 Add-DnsServerResourceRecordA -IPv4Address 192.168.3.20 -ComputerName DC1 -ZoneName company.pri -name OLRoot
 
