@@ -30,4 +30,3 @@ certutil -dspublish -f C:\Temp\OLROOT_CompanyRoot.crt RootCA
         #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
         #certutil –addstore –f root orca1_ContosoRootCA.crt
         #certutil –addstore –f root ContosoRootCA.crl
-

@@ -49,19 +49,19 @@
         else {
             
             $ACL = (get-acl -Path $Path).Access | Where-Object {$_.IdentityReference -eq $IdentityReference}
+            $RefACL = New-Object -typename System.Security.AccessControl.FileSystemAccessRule -ArgumentList ($IdentityReference,$FileSystemRights,$InheritanceFlags,$PropagationFlags,$AccessControlType)
                 If ($ACL -ne $Null) {
-                    $Params = 'AccessControlType','FileSystemRights','InheritanceFlags'
-                        foreach ($A in $ACL) {
-                            if (!($PSBoundParameters.Keys.Where({$_ -in $Params}) | ForEach-Object {Compare-Object -ReferenceObject $PSBoundParameters.$_ -DifferenceObject ($A.$_) -Verbose}))
-                                { 
-                                    write-verbose "ACL is in Desired State."
-                                    return $true
+                    foreach ($A in $ACL) {
+                            Write-Verbose "$($A.FileSystemRights) $($A.InheritanceFlags) $($A.AccessControlType)"
+                            if ((Compare-Object -ReferenceObject $RefACL -DifferenceObject $A -Property FileSystemRights,InheritanceFlags,AccessControlType) -eq $Null) { 
+                                    write-verbose "ACL is in desired state."
+                                    return $True
                                 }
                             else {
-                                write-verbose "ACL not found, continuing comparison"
+                                write-verbose "ACL is not in Desired State.  Continuing search."
                                 }
-                            }
-                        return $False
+                        }
+                    return $False
                     }
                 #ACL = Null
                 else {
