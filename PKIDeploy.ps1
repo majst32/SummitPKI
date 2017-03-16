@@ -88,9 +88,19 @@
             #certutil -crl
 
             #Change this into a file resource that puts the file somewhere else if time
+            File CopyRootCert {
+                Type = 'Directory'
+                DestinationPath = "C:\temp"
+                SourcePath = "C:\Windows\System32\certsrv\certenroll"
+                Recurse = $true
+                MatchSource = $true
+                Ensure = 'Present'
+                DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
+                }
+            
             xSMBShare RootShare {
                 Name = "RootShare"
-                Path = "C:\Windows\System32\certsrv\certenroll"
+                Path = "C:\temp"
                 }   
 
             WaitForAll WFADCSSub {
