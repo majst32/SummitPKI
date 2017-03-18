@@ -245,8 +245,8 @@
             xSmbShare PKIShare {
                 Name = 'PKI'
                 Path = 'C:\pki'
-                FullAccess = "SYSTEM","Company\Domain Admins"
-                ChangeAccess = "Company\Cert Publishers"
+                FullAccess = "$($Node.DomainShortName)\Domain Admins","NT AUTHORITY\SYSTEM"
+                ChangeAccess = "$($Node.DomainShortName)\Cert Publishers"
                 }
         
 
@@ -313,7 +313,8 @@
  #>
             Script DoubleEscaping {
                 TestScript = {
-                    if ((Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping) -eq $True) {
+                    $Test = (Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping)
+                    if ($Test.allowDoubleEscaping -eq $True) {
                         return $True
                         }
                     else {return $False}
