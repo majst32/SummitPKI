@@ -11,6 +11,7 @@
             ADCSValidityPeriod = 'Years'
             ADCSValidityPeriodUnits = '2'
             DNSSuffix = 'company.pri'
+            DomainShortName = "COMPANY"
            }
       
      @{

@@ -260,16 +260,47 @@
                 }
 
         #Set ACLs on folder for CRL publishing
-            FileACLs CertPublishers {
-                Path = "C:\PKI"
-                IdentityReference = "Company\Cert Publishers"
-                FileSystemRights = 'Modify'
-                AccessControlType = 'Allow'
-                InheritanceFlags = "ContainerInherit","ObjectInherit"
-                PropagationFlags = "None"
-                Ensure = 'Present'
+            Script CertPub {
+                TestScript = {
+                    $DomainDN = $Using:Node.DomainShortName
+                    $UserID = "$($DomainDN)\Cert Publishers"
+                    $ACL = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*Modify*") -and ($_.IdentityReference -eq $UserID) -and ($_.AccessControlType -eq "Allow")}
+                    if ($ACL -ne $Null) {
+                        return $True
+                    }
+                    else {
+                        return $False
+                    }
+                }
+                SetScript = {
+                    icacls C:\PKI /grant "Cert Publishers:(OI)(CI)(M)"
+                }
+                GetScript = {
+                    $UserID = "$Using:Node.DomainShortName\Cert Publishers"
+                    return @{Result = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*Modify*") -and ($_.IdentityReference -eq $Userid) -and ($_.AccessControlType -eq "Allow")}}
+                }
             }
+       
+        #Set ACLs on folder for CRL publishing
+            Script Anonymous {
+                TestScript = {
+                    $ACL = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*ReadAndExecute*") -and ($_.IdentityReference -eq "IIS AppPool\DefaultAppPool") -and ($_.AccessControlType -eq "Allow")}
+                    if ($ACL -ne $Null) {
+                        return $True
+                    }
+                    else {
+                        return $False
+                    }
+                }
+                SetScript = {
+                    icacls C:\PKI /grant "Cert Publishers:(OI)(CI)(GR)"
+                }
+                GetScript = {
+                    return @{Result = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*ReadAndExecute*") -and ($_.IdentityReference -eq "IIS AppPool\DefaultAppPool") -and ($_.AccessControlType -eq "Allow")}}
+                }
+            } 
 
+<#
             FileACLs Anonymous {
                 Path = "C:\PKI"
                 IdentityReference = "IIS AppPool\DefaultAppPool"
@@ -279,7 +310,7 @@
                 PropagationFlags = "None"
                 Ensure = 'Present'
             }
- 
+ #>
             Script DoubleEscaping {
                 TestScript = {
                     if ((Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping) -eq $True) {
