@@ -64,7 +64,19 @@
         
         #Configure Root CA settings:  CRL and Cert publication URLs
         
-        #certutil -crl
+        #This needs to be tested 
+        script PublishCRL {
+            testScript = {
+                if ($global:DSCMachineStatus -eq 1) {Return $False}
+                else {Return $True}
+                }
+            setscript = {
+                certutil -crl
+                }
+            getscript = {
+                Return @{Result = "None"}
+                }
+            }
 
         $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
         foreach ($Setting in $ADCSRoot.RegistrySettings) {
@@ -106,11 +118,23 @@
 
             WaitForAll WFADCSSub {
                 NodeName = 'ENTROOT'
-                ResourceName = '[xADCSCertificationAuthority]ADCSSub'
+                ResourceName = '[xSMBShare]CertReq'
                 RetryIntervalSec = 60
                 RetryCount = 30
                 DependsOn = '[xSMBShare]RootShare'
                 }
+
+            #After subordinate is installed, copy the cert request to the root.
+            File ADCSCertReq {
+                Ensure = 'Present'
+                SourcePath = "\\ENTRoot\C$\ENTROOT.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+                DestinationPath = "C:\Temp2"
+                #Contents =  "$($Node.Nodename).$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CompanyRoot).req"
+                MatchSource = $True
+                Type = 'File'
+                Credential = $Credential
+                }
+                
 
 
         }  #End ADCSRoot
@@ -344,10 +368,19 @@
                 Ensure = 'Present'
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
                 }                 
+  <#          
+            file tmpdir {
+                Ensure =  'Present'
+                DestinationPath = "C:\tmp"
+                Type = 'Directory'
+                SourcePath = "C:\$($Node.Nodename).$($Node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+                }
 
-
-
-            
+            xSmbShare CertReq {
+                Name = 'Temp'
+                Path = "C:\Tmp"
+                }
+  #>              
 
            
         #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
