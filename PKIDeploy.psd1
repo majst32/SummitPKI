@@ -29,8 +29,8 @@
      
      @{     NodeName = 'DC1'
             Role = 'DC'
-            Password = 'P@ssword'
-            PsDSCAllowDomainUser = $True
+            Password = 'P@ssw0rd'
+            #PsDSCAllowDomainUser = $True
             EntRootIP = '192.168.3.30'
         }
     )

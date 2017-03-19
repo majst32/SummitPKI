@@ -5,7 +5,7 @@
             @{ModuleName="xSMBShare";ModuleVersion="2.0.0.0"},
             @{ModuleName="xDNSServer";ModuleVersion="1.7.0.0"},
             @{ModuleName="xWebAdministration";ModuleVersion="1.17.0.0"},
-            @{ModuleName="mACLs";ModuleVersion="1.0.0.0"},
+            #@{ModuleName="mACLs";ModuleVersion="1.0.0.0"},
             @{ModuleName="xPendingReboot";ModuleVersion="0.3.0.0"}
 
     Node $AllNodes.Where{$_.Role -eq "ADCSRoot"}.NodeName {
@@ -63,20 +63,6 @@
                 }
         
         #Configure Root CA settings:  CRL and Cert publication URLs
-        
-        #This needs to be tested 
-        script PublishCRL {
-            testScript = {
-                if ($global:DSCMachineStatus -eq 1) {Return $False}
-                else {Return $True}
-                }
-            setscript = {
-                certutil -crl
-                }
-            getscript = {
-                Return @{Result = "None"}
-                }
-            }
 
         $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
         foreach ($Setting in $ADCSRoot.RegistrySettings) {
@@ -97,9 +83,21 @@
                 DependsOn = '[Registry]DSConfigDN','[Script]SetForReboot'
             }
 
-            #certutil -crl
+            #publish CRL
+            script PublishCRL {
+                testScript = {
+                    if ($global:DSCMachineStatus -eq 1) {Return $False}
+                    else {Return $True}
+                    }
+                setscript = {
+                    certutil -crl
+                    }
+                getscript = {
+                    Return @{Result = "None"}
+                    }
+            }
 
-            #Change this into a file resource that puts the file somewhere else if time
+            #Copy the root certificate into a temp directory so don't have to get it from the admin share
             File CopyRootCert {
                 Type = 'Directory'
                 DestinationPath = "C:\temp"
@@ -110,15 +108,17 @@
                 DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
                 }
             
+            #Share folder so subCA and dc can get to the certificate
             xSMBShare RootShare {
                 Name = "RootShare"
                 Path = "C:\temp"
                 DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
                 }   
 
+            #Now wait until the subCA is complete
             WaitForAll WFADCSSub {
                 NodeName = 'ENTROOT'
-                ResourceName = '[xSMBShare]CertReq'
+                ResourceName = '[xADCSCertificationAuthority]ADCSSub'
                 RetryIntervalSec = 60
                 RetryCount = 30
                 DependsOn = '[xSMBShare]RootShare'
@@ -128,18 +128,22 @@
             File ADCSCertReq {
                 Ensure = 'Present'
                 SourcePath = "\\ENTRoot\C$\ENTROOT.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
-                DestinationPath = "C:\Temp2"
+                DestinationPath = "C:\ENTROOT.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
                 #Contents =  "$($Node.Nodename).$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CompanyRoot).req"
                 MatchSource = $True
                 Type = 'File'
                 Credential = $Credential
                 }
                 
-
+        
 
         }  #End ADCSRoot
 
     Node $AllNodes.Where({$_.Role -eq "DC"}).NodeName {
+
+    $Secure = ConvertTo-SecureString -String "$($Node.Password)" -AsPlainText -Force 
+    $Credential = New-Object -typename Pscredential -ArgumentList Administrator, $secure 
+    $OLRoot = $AllNodes.Where({$_.Role -eq "ADCSRoot"}).NodeName
         
         #Create a DNS record for www.company.pri
         xDnsRecord PKIRecord {
@@ -151,13 +155,27 @@
             Target = $Node.EntRootIP
         }
         
+        
+        #Wait for share with root certificate to be available
         WaitForAll WaitForRoot {
             NodeName = 'OLRoot.company.pri'
-            ResourceName = '[file]CopyRootCert'
+            ResourceName = '[xSMBShare]RootShare'
             Retryintervalsec = 60
             RetryCount = 30
         }
 
+          File RootCerttoDC {
+            SourcePath = "\\$OLRoot\RootShare"
+            DestinationPath = "C:\temp"
+            Type = 'Directory'
+            MatchSource = $True
+            Recurse = $True
+            Ensure = 'Present'
+            Credential = $Credential
+            DependsOn = '[WaitForAll]WaitForRoot'
+            }
+
+        #publish root certificate to AD
         Script DSPublish {
                 Credential = $DACredential
                 TestScript = {
@@ -185,7 +203,6 @@
 
         $Secure = ConvertTo-SecureString -String "$($Node.Password)" -AsPlainText -Force 
         $Credential = New-Object -typename Pscredential -ArgumentList Administrator, $secure 
-        $DACredential = New-Object -TypeName Pscredential -ArgumentList "Company.pri\administrator", $Secure
 
         #NonNodeData
         $ADCSSub = $ConfigurationData.ADCSSub
