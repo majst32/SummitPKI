@@ -21,7 +21,7 @@
         }
 
      @{
-            NodeName = 'ENTRoot'
+            NodeName = 'ENTSub'
             Role = 'ADCSSub'
             Password = 'P@ssw0rd'
             PsDscAllowDomainUser = $True
@@ -31,7 +31,7 @@
             Role = 'DC'
             Password = 'P@ssw0rd'
             #PsDSCAllowDomainUser = $True
-            EntRootIP = '192.168.3.30'
+            EntSubIP = '192.168.3.30'
         }
     )
     ADCSRoot = @{
@@ -40,9 +40,10 @@
             CAType = 'StandaloneRootCA'
             CACN = 'CompanyRoot'
             CADNSuffix = 'C=US,L=Philadelphia,S=Pennsylvania,O=Company'
+            CRLURL = "www.company.pri"
             RegistrySettings = @(
-                @{Name = "CRLPublicationURLs";Type = "MultiString";Value = @('1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n','2:http://www.company.pri/pki/%3%8.crl')},
-                @{Name = "CACertPublicationURLs"; Type = "MultiString"; Value = "2:http://www.company.pri/pki/%1_%3%4.crt"},
+                #@{Name = "CRLPublicationURLs";Type = "MultiString";Value = '1:C:\Windows\system32\CertSrv\CertEnroll\%3%8.crl\n\02:http://www.company.pri/pki/%3%8.crl'},
+                #@{Name = "CACertPublicationURLs"; Type = "MultiString"; Value = "2:http://www.company.pri/pki/%1_%3%4.crt"},
                 @{Name = "CRLOverlapPeriodUnits"; Type = "Dword"; Value = 12},
                 @{Name = "CRLOverlapPeriod"; Type = "String"; Value = "Hours"},
                 @{Name = "ValidityPeriodUnits"; Type = "Dword";Value = 10},

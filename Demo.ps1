@@ -1,6 +1,6 @@
 ﻿#Landscape
 #OLRoot - "offline", non-domain-joined
-#EntRoot - domain-joined subordinate CA
+#ENTSub - domain-joined subordinate CA
 #DC1 - domain controller
 
 #The build:
@@ -22,11 +22,11 @@ Add-DnsServerResourceRecordA -IPv4Address 192.168.3.20 -ComputerName DC1 -ZoneNa
 set-item trustedhosts -Value "*"
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\OLRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\olroot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
-Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
-Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xADCSDeployment" -Destination "\\ENTSub.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -Recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xSMBShare" -Destination "\\ENTSub.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
 Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xDNSServer" -Destination "\\DC1.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
-Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
-Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\mACLs" -Destination "\\EntRoot.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\xWebAdministration" -Destination "\\ENTSub.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
+Copy-Item -Path "C:\Program Files\WindowsPowerShell\Modules\mACLs" -Destination "\\ENTSub.company.pri\C`$\Program Files\WindowsPowerShell\Modules" -recurse -Force
 
 
 Start-DscConfiguration -ComputerName OLRoot.company.pri -Path "C:\DSC\Configs" -Verbose -Wait -Credential Get-Credential
@@ -46,3 +46,14 @@ certutil -dspublish -f C:\Temp\OLROOT_CompanyRoot.crt RootCA
         #certutil –dspublish –f orca1_ContosoRootCA.crt RootCA
         #certutil –addstore –f root orca1_ContosoRootCA.crt
         #certutil –addstore –f root ContosoRootCA.crl
+
+#Certreq commands for issuing CA
+certreq -submit C:\ENTSub.company.pri_IssuingCA-CompanyRoot.req
+certutil -resubmit #
+certreq -retrieve "#" C:\ENTSUB.company.pri_IssuingCA-CompanyRoot.crt
+
+#On EntSub:
+copy '\\olroot\C$\ENTSub.company.pri_IssuingCA-CompanyRoot.cr*' c:\pki\
+certutil –installcert a:\APP1.corp.contoso.com_corp-APP1-CA.crt
+start-service certsvc
+copy c:\Windows\system32\certsrv\certenroll\*.cr* c:\pki\

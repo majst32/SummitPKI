@@ -64,6 +64,35 @@
         
         #Configure Root CA settings:  CRL and Cert publication URLs
 
+        script SetCRLCDP {
+            TestScript = {
+                if ((Get-CACrlDistributionPoint).count -ne 2) {Return $False}
+                else {Return $True}
+                }
+            SetScript = {
+               $crllist = Get-CACrlDistributionPoint; foreach ($crl in $crllist) {Remove-CACrlDistributionPoint $crl.uri -Force}
+               Add-CACRLDistributionPoint -Uri C:\Windows\System32\CertSrv\CertEnroll\%3%8.crl -PublishToServer -Force
+               $CRLURL = $using:ADCSRoot.CRLURL
+               Add-CACRLDistributionPoint -Uri "http://$($CRLURL)/pki/%3%8.crl" -AddToCertificateCDP -Force
+               }
+            getScript = {
+               return @{Result=(Get-CACrlDistributionPoint).Count}
+               }
+            }
+
+        script ClearAIAList {
+            TestScript = {
+                if ((Get-CAAuthorityInformationAccess).Count -ne 0) {return $False}
+                else {Return $True}
+                }
+            SetScript = {
+                $aialist = Get-CAAuthorityInformationAccess; foreach ($aia in $aialist) {Remove-CAAuthorityInformationAccess $aia.uri -Force}
+                }
+            GetScript = {
+                return @{Result=(Get-CAAuthorityInformationAccess).Count}
+                }
+            }
+
         $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
         foreach ($Setting in $ADCSRoot.RegistrySettings) {
 
@@ -86,8 +115,14 @@
             #publish CRL
             script PublishCRL {
                 testScript = {
-                    if ($global:DSCMachineStatus -eq 1) {Return $False}
-                    else {Return $True}
+                    try {
+                        #$CACN=$Using:ADCSRoot.CACN
+                        get-childitem -Path "C:\Windows\System32\certsrv\certenroll\$($CACN).crl" -erroraction stop
+                        return $True
+                        }
+                    catch {
+                        return $False
+                        }
                     }
                 setscript = {
                     certutil -crl
@@ -117,7 +152,7 @@
 
             #Now wait until the subCA is complete
             WaitForAll WFADCSSub {
-                NodeName = 'ENTROOT'
+                NodeName = 'ENTSUB'
                 ResourceName = '[xADCSCertificationAuthority]ADCSSub'
                 RetryIntervalSec = 60
                 RetryCount = 30
@@ -127,8 +162,8 @@
             #After subordinate is installed, copy the cert request to the root.
             File ADCSCertReq {
                 Ensure = 'Present'
-                SourcePath = "\\ENTRoot\C$\ENTROOT.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
-                DestinationPath = "C:\ENTROOT.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+                SourcePath = "\\ENTSub\C$\ENTSub.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+                DestinationPath = "C:\ENTSub.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
                 #Contents =  "$($Node.Nodename).$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CompanyRoot).req"
                 MatchSource = $True
                 Type = 'File'
@@ -152,7 +187,7 @@
             PsDscRunAsCredential = $DACredential
             Ensure = 'Present'
             Type = 'ARecord'
-            Target = $Node.EntRootIP
+            Target = $Node.ENTSubIP
         }
         
         
@@ -203,6 +238,7 @@
 
         $Secure = ConvertTo-SecureString -String "$($Node.Password)" -AsPlainText -Force 
         $Credential = New-Object -typename Pscredential -ArgumentList Administrator, $secure 
+        $DACredential = new-Object -typeName pscredential -ArgumentList "Company.pri\administrator", $secure
 
         #NonNodeData
         $ADCSSub = $ConfigurationData.ADCSSub
@@ -216,6 +252,7 @@
             ResourceName = '[xSMBShare]RootShare'
             RetryIntervalSec = 60
             RetryCount = 30
+            PsDscRunAsCredential = $Credential
             }
         
         WaitForAll WFDSPublish {
@@ -223,6 +260,7 @@
             ResourceName = '[Script]DSPublish'
             RetryIntervalSec = 60
             RetryCount = 30
+            PsDscRunAsCredential = $Credential
             }
 
         #Copy Root Cert from OLRoot
@@ -257,6 +295,20 @@
             }
           
           #Certutil -addstore -root CRLFile - need code
+          <#
+            $Store = certutil -store root
+
+            $count = 0
+            foreach ($obj in $store) { 
+                if ($obj -like "*CRL*") {
+                    if ($store[$count+1] -like "*TestRoot*") {
+                        write-host "True"
+                        $count++
+                        }
+                    else {$Count++}
+                    }
+                }
+            #>
            
           foreach ($Feature in $ADCSSub.Features) {
 
@@ -334,7 +386,7 @@
                     }
                 }
                 SetScript = {
-                    icacls C:\PKI /grant "Cert Publishers:(OI)(CI)(GR)"
+                    icacls C:\PKI /grant "IIS AppPool\DefaultAppPool:(OI)(CI)(GR)"
                 }
                 GetScript = {
                     return @{Result = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*ReadAndExecute*") -and ($_.IdentityReference -eq "IIS AppPool\DefaultAppPool") -and ($_.AccessControlType -eq "Allow")}}
