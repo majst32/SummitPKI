@@ -24,7 +24,12 @@
                 }
                 
         }
-        #If CA hasn't been installed yet, set $DSCMachineStatus to $True to set up for reboot after.
+<#        
+        The intent here is to set a flag so that if this is the first time through the config, and ADCS isn't configured yet, 
+        set a flag so that either the server reboots, or that the certsvc is restarted after all the registry settings are configured.
+
+        ##### DO NOT USE THIS.  THIS MAKES THE SERVER REBOOT ITSELF OVER AND OVER.  #####
+
         script SetForReboot {
             testScript = {
                     try {
@@ -32,19 +37,20 @@
                         return $False
                     }
                     catch {
-                        return $True
+                        if ($Error[0] -like "*already installed*") {return $True}
+                        else {return $False}
                     }
             }
             setScript = {
-                $DSCMachineStatus = 1
+                $global:DSCMachineStatus = 1
                 }
             getscript = {
-                return @{Result = $DSCMachineStatus}
+                return @{Result = $global:DSCMachineStatus}
             }
             DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
         }
 
-
+#>
         #Configure Root CA         
             xAdcsCertificationAuthority ADCSConfig {
                 CAType = $ADCSRoot.CAType
@@ -63,6 +69,7 @@
                 }
         
         #Configure Root CA settings:  CRL and Cert publication URLs
+        #Changed from registry resource to script resource, untested
 
         script SetCRLCDP {
             TestScript = {
@@ -78,8 +85,10 @@
             getScript = {
                return @{Result=(Get-CACrlDistributionPoint).Count}
                }
+            DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
             }
 
+        #Changed from registry resource to script resource, untested
         script ClearAIAList {
             TestScript = {
                 if ((Get-CAAuthorityInformationAccess).Count -ne 0) {return $False}
@@ -91,7 +100,10 @@
             GetScript = {
                 return @{Result=(Get-CAAuthorityInformationAccess).Count}
                 }
+            DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
             }
+
+        #Other registry settings that can be set using registry resource
 
         $Key = "HKEY_Local_Machine\System\CurrentControlSet\Services\CertSvc\Configuration\$($ADCSRoot.CACN)"
         foreach ($Setting in $ADCSRoot.RegistrySettings) {
@@ -106,13 +118,9 @@
                 }
             }
 
-            #Reboot to pick up certutil settings if needed, but only if previous script set the flag for reboot.
-            xPendingReboot RebootforCertsvc {
-                Name = 'Reboot'
-                DependsOn = '[Registry]DSConfigDN','[Script]SetForReboot'
-            }
-
             #publish CRL
+            #Originally skipped with comment, untested
+
             script PublishCRL {
                 testScript = {
                     try {
@@ -130,6 +138,7 @@
                 getscript = {
                     Return @{Result = "None"}
                     }
+                DependsOn = '[xPendingReboot]RebootForCertsvc'
             }
 
             #Copy the root certificate into a temp directory so don't have to get it from the admin share
@@ -140,14 +149,14 @@
                 Recurse = $true
                 MatchSource = $true
                 Ensure = 'Present'
-                DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
+                DependsOn = '[Script]PublishCRL'
                 }
             
             #Share folder so subCA and dc can get to the certificate
             xSMBShare RootShare {
                 Name = "RootShare"
                 Path = "C:\temp"
-                DependsOn = '[xADCSCertificationAuthority]ADCSConfig'
+                DependsOn = '[File]CopyRootCert'
                 }   
 
             #Now wait until the subCA is complete
@@ -170,7 +179,22 @@
                 Credential = $Credential
                 }
                 
-        
+            #Then it gets icky - and unfinished
+            #certreq -submit "C:\ENTSub.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+            #certutil -resubmit <request number from previous step> to issue the certificate
+            #certreq -retrieve <request number from previous step" C:\somePathtoCertificate
+
+            #After that copy the root and root CRL to the pki folder on EntSub
+            #Copy the issuing to somewhere on EntSub too
+            #certutil -InstallCertificate C:\somewhere\nameofIssuingCert.crt
+            #start-service certsvc
+            #Copy issuing cert and issuing CRL from C:\windows\system32\certsvc\certenroll to C:\pki
+            #Set CRL CDP, AIA, and other registry settings on issuing (use same code as on root)
+
+            #Autoenrollment - have that coded
+            #Web Server templates and DSC templates - have that coded
+
+
 
         }  #End ADCSRoot
 
@@ -295,28 +319,81 @@
             }
           
           #Certutil -addstore -root CRLFile - need code
-          <#
-            $Store = certutil -store root
+          #This was accidentally skipped and is new/untested
 
-            $count = 0
-            foreach ($obj in $store) { 
-                if ($obj -like "*CRL*") {
-                    if ($store[$count+1] -like "*TestRoot*") {
-                        write-host "True"
-                        $count++
+          script ImportCRL {
+            TestScript = {
+                $Store = certutil -store root
+                $count = 0
+                foreach ($obj in $store) { 
+                    if ($obj -like "*= CRL*") {
+                        $Next = $Count+1 
+                        $CRLList = $Store[$Next..$Store.Count]
+                        foreach ($Line in $CRLList) {
+                            $CACN = $Using:ADCSRoot.CACN
+                            if ($Line -like "*$CACN*") {
+                                return $True
+                                }
+                            else {
+                                return $False
+                                }
+                            }
                         }
                     else {$Count++}
                     }
                 }
-            #>
-           
+            SetScript = {
+                $CRLName = $Using:ADCSRoot.CACN
+                $CRLFile = "$CRLName.crl"
+                certutil -addstore -f root "C:\temp\$CRLFile"
+                }
+            GetScript = {
+             $Store = certutil -store root
+             $count = 0
+             foreach ($obj in $store) { 
+                if ($obj -like "*= CRL*") {
+                    $Next = $Count+1 
+                    $CRLList = $Store[$Next..$Store.Count]
+                    foreach ($Line in $CRLList) {
+                        $CACN = $Using:ADCSRoot.CACN
+                        if ($Line -like "*$CACN*") {
+                            return @{Result=$True}
+                                }
+                            else {
+                                return @{Result=$False}
+                                }
+                            }
+                        }
+                    else {$Count++}
+                    }
+                }
+            }
+ 
+ <#       The intent of this part of the code is to try to detect if this is the first time through the IIS settings portion and set a flag for
+          a reboot (here) or iisreset after all the settings are set.
+          
+          ##### ONCE AGAIN, DO NOT USE THIS PART OF THE CODE, IT WILL CAUSE AN INFINITE REBOOT LOOP.  FUN TIMES FOR ALL.  #####
+            
+          script SetForIISReboot {
+            testScript = {
+                    if ((get-windowsfeature -name Web-Server).Installed -eq $False) 
+                        {return $False}
+                    else {return $True}
+            }
+            setScript = {
+                $global:DSCMachineStatus = 1
+                }
+            getscript = {
+                return @{Result = $global:DSCMachineStatus}
+            }
+        }
+#>              
           foreach ($Feature in $ADCSSub.Features) {
 
             WindowsFeature $Feature {
                 Name = $Feature
                 Ensure = 'Present'
-                }
-                
+                }              
         }
            
             #Create directory structure for virtual directory
@@ -353,6 +430,7 @@
                 }
 
         #Set ACLs on folder for CRL publishing
+       
             Script CertPub {
                 TestScript = {
                     $DomainDN = $Using:Node.DomainShortName
@@ -393,7 +471,9 @@
                 }
             } 
 
-<#
+<#          A fun little custom resource attempt at setting NTFS permissions.  Currently doesn't work, there are problems with Test-TargetResource.
+            Could use some help on the resource and don't plan on giving up on it, just gave up for this presentation.
+
             FileACLs Anonymous {
                 Path = "C:\PKI"
                 IdentityReference = "IIS AppPool\DefaultAppPool"
@@ -404,6 +484,9 @@
                 Ensure = 'Present'
             }
  #>
+
+            #Set the double escaping checkbox in IIS
+
             Script DoubleEscaping {
                 TestScript = {
                     $Test = (Get-WebConfiguration -Filter system.webServer/security/requestFiltering -PSPath ‘IIS:\sites\Default Web Site\PKI’ | Select-Object AllowDoubleEscaping)
@@ -422,6 +505,12 @@
                     return @{Result = $Filter.AllowDoubleEscaping}
                     }
                 }
+            
+            #Reboot to pick up IIS settings (can be changed to iisreset) if needed, but won't do anything until the code to indicate it's necessary is fixed.
+            xPendingReboot RebootforIIS {
+                Name = 'RebootEntSub'
+                DependsOn = '[Script]DoubleEscaping'
+            }
                                                
             xAdcsCertificationAuthority ADCSSub {
                 CAType = $ADCSSub.CAType
@@ -437,26 +526,9 @@
                 Ensure = 'Present'
                 DependsOn = '[WindowsFeature]ADCS-Cert-Authority'
                 }                 
-  <#          
-            file tmpdir {
-                Ensure =  'Present'
-                DestinationPath = "C:\tmp"
-                Type = 'Directory'
-                SourcePath = "C:\$($Node.Nodename).$($Node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
-                }
-
-            xSmbShare CertReq {
-                Name = 'Temp'
-                Path = "C:\Tmp"
-                }
-  #>              
-
-           
-        #Script Resources (or certutil custom resource) to dspublish and addroot or put it in GPO
-        #certutil –addstore –f root orca1_ContosoRootCA.crt
-        #certutil –addstore –f root ContosoRootCA.crl
-
+            
     }
 }
 
 PKIDeploy -ConfigurationData .\PKIDeploy.psd1 -outputpath "C:\DSC\Configs"
+#PKIDeploy -ConfigurationData .\PKIDeploy2.psd1 -outputpath "C:\DSC\Configs"
