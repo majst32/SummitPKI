@@ -138,7 +138,7 @@
                 getscript = {
                     Return @{Result = "None"}
                     }
-                DependsOn = '[xPendingReboot]RebootForCertsvc'
+                DependsOn = '[Registry]DSConfigDN'
             }
 
             #Copy the root certificate into a temp directory so don't have to get it from the admin share
@@ -180,12 +180,16 @@
                 }
                 
             #Then it gets icky - and unfinished
-            #certreq -submit "C:\ENTSub.$($node.DNSSuffix)_IssuingCA-$($ADCSRoot.CACN).req"
+            #Don't do this via remoting.  
+
+            #certreq -submit "C:\EntSub.company.pri_IssuingCA-CompanyRoot.req"
             #certutil -resubmit <request number from previous step> to issue the certificate
             #certreq -retrieve <request number from previous step" C:\somePathtoCertificate
 
             #After that copy the root and root CRL to the pki folder on EntSub
+                #copy-item C:\temp\* C:\pki
             #Copy the issuing to somewhere on EntSub too
+                #copy-item "\\olroot\C$\EntSub.company.pri_IssuingCA.crt" C:\temp
             #certutil -InstallCertificate C:\somewhere\nameofIssuingCert.crt
             #start-service certsvc
             #Copy issuing cert and issuing CRL from C:\windows\system32\certsvc\certenroll to C:\pki
@@ -341,6 +345,7 @@
                         }
                     else {$Count++}
                     }
+                return $false
                 }
             SetScript = {
                 $CRLName = $Using:ADCSRoot.CACN
