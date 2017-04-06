@@ -460,7 +460,7 @@
         #Set ACLs on folder for CRL publishing
             Script Anonymous {
                 TestScript = {
-                    $ACL = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*ReadAndExecute*") -and ($_.IdentityReference -eq "IIS AppPool\DefaultAppPool") -and ($_.AccessControlType -eq "Allow")}
+                    $ACL = (get-ACL -Path C:\PKI).Access | Where-Object {($_.FileSystemRights -like "*Read*") -and ($_.IdentityReference -eq "IIS AppPool\DefaultAppPool") -and ($_.AccessControlType -eq "Allow")}
                     if ($ACL -ne $Null) {
                         return $True
                     }
